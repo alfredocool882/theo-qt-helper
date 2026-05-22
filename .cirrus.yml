@@ -1,15 +1,31 @@
-task:
-  matrix:
-    image:
-      - ubuntu-22.04
-      - windows-2022
-      - macos-ventura-base
+linux_task:
+  container:
+    image: ubuntu:22.04
   install_script:
-    - if [ "$OS" = "Windows_NT" ]; then choco install ninja cmake -y; else brew install qt@6 ninja cmake || true; fi
-    - if [ "$OS" != "Windows_NT" ] && [ "$(uname)" != "Darwin" ]; then sudo apt-get update && sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-tools-dev libqt6help6 libqt6svg6-dev libqt6printsupport6; fi
-  script:
-    - if [ "$OS" = "Windows_NT" ]; then export CMAKE_PREFIX_PATH="C:/Qt/6.11.0/msvc2022_64"; fi
-    - if [ "$(uname)" = "Darwin" ]; then export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"; fi
+    - apt-get update
+    - apt-get install -y cmake ninja-build qt6-base-dev qt6-tools-dev libqt6help6 libqt6svg6-dev libqt6printsupport6
+  build_script:
     - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
     - cmake --build build
-    - if [ "$OS" = "Windows_NT" ]; then test -f release/TheoQtHelper.exe; elif [ "$(uname)" = "Darwin" ]; then test -x release/TheoQtHelper.app/Contents/MacOS/TheoQtHelper || test -x release/TheoQtHelper; else test -x release/TheoQtHelper; fi
+    - test -x release/TheoQtHelper
+
+windows_task:
+  windows_container:
+    image: windows-2022
+  install_script:
+    - choco install ninja cmake -y
+  build_script:
+    - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build
+    - if (Test-Path release\TheoQtHelper.exe) { exit 0 } else { exit 1 }
+
+macos_task:
+  macos_instance:
+    image: ventura-base
+  install_script:
+    - brew install qt@6 ninja cmake
+  build_script:
+    - export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
+    - cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build
+    - test -x release/TheoQtHelper.app/Contents/MacOS/TheoQtHelper || test -x release/TheoQtHelper
