@@ -42,6 +42,7 @@ signals:
 public slots:
     void onBrowserNavigate(const QUrl &url, HelpBrowser::NavMode mode);
     void onBrowserSourceChanged(const QUrl &url);
+    void onBrowserHistoryChanged();
 
 protected:
     void focusInEvent(QFocusEvent *event) override;

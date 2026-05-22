@@ -1,6 +1,7 @@
 #include "helpbrowser.h"
 #include "apptheme.h"
 #include "documentpane.h"
+#include "mousebuttons.h"
 
 #include <QHelpEngineCore>
 #include <QDesktopServices>
@@ -61,7 +62,7 @@ ArticleCache &articleCache()
 
 QString articleCacheKey(const QUrl &url)
 {
-    return url.path() + QLatin1Char('|') + AppTheme::currentId() + QStringLiteral("|art4");
+    return url.path() + QLatin1Char('|') + AppTheme::currentId() + QStringLiteral("|art11");
 }
 
 static bool isLandingBodyHtml(const QString &html)
@@ -70,19 +71,129 @@ static bool isLandingBodyHtml(const QString &html)
         || html.contains(QStringLiteral("class='landing'"), Qt::CaseInsensitive);
 }
 
+static const QRegularExpression &fontSizeDeclRegex()
+{
+    static const QRegularExpression re(
+        QStringLiteral("font-size\\s*:\\s*[^;\"']+;?"),
+        QRegularExpression::CaseInsensitiveOption);
+    return re;
+}
+
+static QString mergeAttrFontSize(QString attrs, int px, const QString &extraStyle = QString())
+{
+    QString inject = QStringLiteral("font-size:%1px;").arg(px);
+    if (!extraStyle.isEmpty())
+        inject += extraStyle;
+    static const QRegularExpression styleAttr(
+        QStringLiteral("style\\s*=\\s*\"([^\"]*)\"|style\\s*=\\s*'([^']*)'"),
+        QRegularExpression::CaseInsensitiveOption);
+    if (attrs.contains(QStringLiteral("style="), Qt::CaseInsensitive)) {
+        const QRegularExpressionMatch sm = styleAttr.match(attrs);
+        if (sm.hasMatch()) {
+            QString style = sm.captured(1).isEmpty() ? sm.captured(2) : sm.captured(1);
+            style.remove(fontSizeDeclRegex());
+            if (!style.isEmpty() && !style.endsWith(QLatin1Char(';')))
+                style += QLatin1Char(';');
+            style = inject + style;
+            QString merged = attrs;
+            merged.replace(styleAttr, QStringLiteral("style=\"%1\"").arg(style));
+            return merged;
+        }
+    }
+    return QStringLiteral(" style=\"%1\"").arg(inject) + attrs;
+}
+
+static QString extractAttrValue(const QString &attrs, QLatin1String key)
+{
+    const QRegularExpression re(
+        QStringLiteral(R"(%1\s*=\s*["']([^"']+)["'])").arg(QString::fromLatin1(key.latin1())),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch m = re.match(attrs);
+    return m.hasMatch() ? m.captured(1) : QString();
+}
+
+static QString scaleInlineTags(QString html, int px)
+{
+    static const QRegularExpression openTag(
+        QStringLiteral("<((?:span|i|code|tt|b)\\b)([^>]*)>"),
+        QRegularExpression::CaseInsensitiveOption);
+    QString result;
+    int pos = 0;
+    auto it = openTag.globalMatch(html);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch match = it.next();
+        result += html.mid(pos, match.capturedStart() - pos);
+        const QString tag = match.captured(1);
+        const QString attrs = mergeAttrFontSize(match.captured(2), px);
+        result += QLatin1Char('<') + tag + attrs + QLatin1Char('>');
+        pos = match.capturedEnd();
+    }
+    result += html.mid(pos);
+    return result;
+}
+
+static QString applyZoomToDocumentHtml(QString html, int zoomPercent)
+{
+    const double scale = zoomPercent / 100.0;
+    const int bodyPx = qRound(14.0 * scale);
+    const int fnPx = qRound(16.0 * scale);
+    static const QRegularExpression fnBlock(
+        QStringLiteral("<h3\\b([^>]*)>([\\s\\S]*?)</h3>"),
+        QRegularExpression::DotMatchesEverythingOption | QRegularExpression::CaseInsensitiveOption);
+
+    QString result;
+    int pos = 0;
+    auto it = fnBlock.globalMatch(html);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch match = it.next();
+        result += scaleInlineTags(html.mid(pos, match.capturedStart() - pos), bodyPx);
+        const QString attrs = match.captured(1);
+        if (attrs.contains(QStringLiteral("fn"), Qt::CaseInsensitive)) {
+            const QString scaled = scaleInlineTags(match.captured(2), fnPx);
+            QString divAttrs = QStringLiteral(" class=\"api-fn-header\"");
+            const QString id = extractAttrValue(attrs, QLatin1String("id"));
+            if (!id.isEmpty())
+                divAttrs += QStringLiteral(" id=\"%1\"").arg(id);
+            divAttrs = mergeAttrFontSize(
+                divAttrs,
+                fnPx,
+                QStringLiteral("font-weight:600;line-height:1.4;margin:18px 0 0;padding:12px 0 10px 0;"
+                               "border:0;border-bottom:2px solid #e0e0e0;background:transparent;"
+                               "font-family:'Droid Sans Mono','Cascadia Code',Consolas,monospace;"));
+            result += QStringLiteral("<div%1>%2</div>").arg(divAttrs, scaled);
+        } else {
+            result += match.captured(0);
+        }
+        pos = match.capturedEnd();
+    }
+    result += scaleInlineTags(html.mid(pos), bodyPx);
+    return result;
+}
+
+static void stripLegacyFontSizes(QString &html)
+{
+    static const QRegularExpression fontSizeAttr(
+        QStringLiteral("\\ssize\\s*=\\s*\"?\\d+\"?"),
+        QRegularExpression::CaseInsensitiveOption);
+    html.remove(fontSizeAttr);
+}
+
 static QByteArray wrapPreparedArticle(const PreparedArticle &article, int zoomPercent)
 {
     const QString titleTag = article.title.isEmpty()
         ? QString()
         : QStringLiteral("<title>%1</title>").arg(article.title.toHtmlEscaped());
     const QString style = AppTheme::documentStyle(zoomPercent);
+    const QString body = isLandingBodyHtml(article.bodyHtml)
+        ? scaleInlineTags(article.bodyHtml, qRound(14.0 * zoomPercent / 100.0))
+        : applyZoomToDocumentHtml(article.bodyHtml, zoomPercent);
     if (isLandingBodyHtml(article.bodyHtml)) {
         return QStringLiteral("<html><head><meta charset=\"utf-8\">%1<style>%2</style></head><body>%3</body></html>")
-            .arg(titleTag, style, article.bodyHtml)
+            .arg(titleTag, style, body)
             .toUtf8();
     }
     return QStringLiteral("<html><head><meta charset=\"utf-8\">%1<style>%2</style></head><body><main>%3</main></body></html>")
-        .arg(titleTag, style, article.bodyHtml)
+        .arg(titleTag, style, body)
         .toUtf8();
 }
 
@@ -468,7 +579,102 @@ void HelpBrowser::scheduleAnchorScroll(const QString &fragment)
     QTimer::singleShot(100, this, [this, fragment] { scrollToIndexAnchor(fragment); });
 }
 
-void HelpBrowser::doSetSource(const QUrl &name, QTextDocument::ResourceType type)
+QUrl HelpBrowser::historyUrl(const QUrl &url) const
+{
+    QUrl entry = resolveLink(url);
+    if (!entry.isValid())
+        entry = url;
+    QString path = entry.path();
+    path.replace(QStringLiteral("/html/html/"), QStringLiteral("/html/"));
+    entry.setPath(path);
+    return entry;
+}
+
+static bool sameHistoryEntry(const QUrl &a, const QUrl &b)
+{
+    return a.scheme() == b.scheme() && a.path() == b.path() && a.fragment() == b.fragment();
+}
+
+void HelpBrowser::notifyHistoryChanged()
+{
+    emit navigationHistoryChanged();
+}
+
+void HelpBrowser::pushPageHistory(const QUrl &url)
+{
+    const QUrl entry = historyUrl(url);
+    if (!entry.isValid())
+        return;
+    if (QScrollBar *bar = verticalScrollBar()) {
+        if (m_historyIndex >= 0 && m_historyIndex < m_pageHistory.size())
+            m_pageHistory[m_historyIndex].scrollY = bar->value();
+    }
+    while (m_pageHistory.size() > m_historyIndex + 1)
+        m_pageHistory.removeLast();
+    if (m_historyIndex >= 0 && sameHistoryEntry(m_pageHistory.at(m_historyIndex).url, entry))
+        return;
+    NavEntry item;
+    item.url = entry;
+    item.scrollY = 0;
+    m_pageHistory.append(item);
+    m_historyIndex = m_pageHistory.size() - 1;
+    notifyHistoryChanged();
+}
+
+void HelpBrowser::restorePageAt(int index)
+{
+    if (index < 0 || index >= m_pageHistory.size())
+        return;
+    m_restoringHistory = true;
+    m_historyIndex = index;
+    const NavEntry entry = m_pageHistory.at(index);
+    const QUrl target = entry.url;
+    if (isSameHelpDocument(pageSource(), target)) {
+        m_helpSource = target;
+        m_lastAppliedZoomPercent = m_zoomPercent;
+        if (!target.fragment().isEmpty()) {
+            scheduleAnchorScroll(target.fragment());
+        } else if (QScrollBar *bar = verticalScrollBar()) {
+            bar->setValue(entry.scrollY);
+        }
+    } else {
+        QTextBrowser::setSource(target, QTextDocument::UnknownResource);
+        m_helpSource = target;
+        m_lastAppliedZoomPercent = m_zoomPercent;
+        if (!target.fragment().isEmpty())
+            scheduleAnchorScroll(target.fragment());
+        else if (QScrollBar *bar = verticalScrollBar())
+            bar->setValue(entry.scrollY);
+    }
+    m_restoringHistory = false;
+    notifyHistoryChanged();
+}
+
+bool HelpBrowser::canGoBack() const
+{
+    return m_historyIndex > 0;
+}
+
+bool HelpBrowser::canGoForward() const
+{
+    return m_historyIndex >= 0 && m_historyIndex + 1 < m_pageHistory.size();
+}
+
+void HelpBrowser::backward()
+{
+    if (!canGoBack())
+        return;
+    restorePageAt(m_historyIndex - 1);
+}
+
+void HelpBrowser::forward()
+{
+    if (!canGoForward())
+        return;
+    restorePageAt(m_historyIndex + 1);
+}
+
+void HelpBrowser::setSource(const QUrl &name, QTextDocument::ResourceType type)
 {
     const QUrl resolved = resolveLink(name);
     if (resolved.scheme().startsWith(QStringLiteral("http"))) {
@@ -477,16 +683,32 @@ void HelpBrowser::doSetSource(const QUrl &name, QTextDocument::ResourceType type
     }
     const QUrl target = resolved.isValid() ? resolved : name;
     const QString fragment = target.fragment();
-    const QUrl current = pageSource();
-    const bool samePage = isSameHelpDocument(current, target);
-    if (samePage && !fragment.isEmpty()) {
+    if (isSameHelpDocument(pageSource(), target) && !fragment.isEmpty()) {
+        if (!m_restoringHistory)
+            pushPageHistory(target);
         m_helpSource = target;
         scheduleAnchorScroll(fragment);
         return;
     }
+    if (!m_restoringHistory)
+        pushPageHistory(target);
+    QTextBrowser::setSource(target, type);
+}
+
+void HelpBrowser::doSetSource(const QUrl &name, QTextDocument::ResourceType type)
+{
+    const QUrl resolved = resolveLink(name);
+    if (resolved.scheme().startsWith(QStringLiteral("http"))) {
+        QDesktopServices::openUrl(resolved);
+        return;
+    }
+    const QUrl target = resolved.isValid() ? resolved : name;
     QTextBrowser::doSetSource(target, type);
     m_helpSource = source().isValid() ? source() : target;
     m_lastAppliedZoomPercent = m_zoomPercent;
+    if (!m_restoringHistory && m_historyIndex < 0 && target.isValid())
+        pushPageHistory(target);
+    const QString fragment = target.fragment();
     if (!fragment.isEmpty())
         scheduleAnchorScroll(fragment);
 }
@@ -500,6 +722,8 @@ void HelpBrowser::attachToPane(DocumentPane *pane)
     if (!pane)
         return;
     connect(this, &HelpBrowser::linkNavigateRequested, pane, &DocumentPane::onBrowserNavigate,
+            Qt::UniqueConnection);
+    connect(this, &HelpBrowser::navigationHistoryChanged, pane, &DocumentPane::onBrowserHistoryChanged,
             Qt::UniqueConnection);
     connect(this, &QTextBrowser::sourceChanged, pane, &DocumentPane::onBrowserSourceChanged,
             Qt::UniqueConnection);
@@ -515,18 +739,58 @@ void HelpBrowser::detachFromPane()
 
 QUrl HelpBrowser::linkAtViewportPos(const QPoint &viewportPos) const
 {
-    const QString anchor = anchorAt(viewportPos);
-    if (!anchor.isEmpty()) {
-        const QUrl resolved = resolveLink(QUrl(anchor));
-        if (resolved.isValid() && resolved.scheme() == QStringLiteral("qthelp"))
-            return resolved;
-    }
-    const QTextCursor cursor = cursorForPosition(viewportPos);
-    const QTextCharFormat fmt = cursor.charFormat();
-    if (fmt.isAnchor()) {
-        const QUrl resolved = resolveLink(QUrl(fmt.anchorHref()));
-        if (resolved.isValid() && resolved.scheme() == QStringLiteral("qthelp"))
-            return resolved;
+    const auto linkFromFmt = [this](const QTextCharFormat &fmt) -> QUrl {
+        if (!fmt.isAnchor())
+            return {};
+        const QString href = fmt.anchorHref();
+        if (href.isEmpty())
+            return {};
+        QUrl target = href.startsWith(QLatin1Char('#'))
+            ? pageSource().resolved(QUrl(href))
+            : resolveLink(QUrl(href));
+        if (!target.isValid())
+            target = resolveLink(QUrl(href));
+        if (target.isValid() && target.scheme() == QStringLiteral("qthelp"))
+            return target;
+        return {};
+    };
+
+    const auto tryPoint = [this, &linkFromFmt](const QPoint &p) -> QUrl {
+        const QTextCursor cursor = cursorForPosition(p);
+        if (!cursor.isNull()) {
+            const QUrl fromFmt = linkFromFmt(cursor.charFormat());
+            if (fromFmt.isValid())
+                return fromFmt;
+            QTextCursor probe = cursor;
+            probe.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, 1);
+            const QUrl fromLeft = linkFromFmt(probe.charFormat());
+            if (fromLeft.isValid())
+                return fromLeft;
+            probe = cursor;
+            probe.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, 1);
+            const QUrl fromRight = linkFromFmt(probe.charFormat());
+            if (fromRight.isValid())
+                return fromRight;
+        }
+        const QString anchorName = anchorAt(p);
+        if (!anchorName.isEmpty()) {
+            QUrl page = pageSource();
+            if (page.isValid()) {
+                page.setFragment(anchorName);
+                const QUrl resolved = resolveLink(page);
+                if (resolved.isValid() && resolved.scheme() == QStringLiteral("qthelp"))
+                    return resolved;
+            }
+        }
+        return {};
+    };
+
+    for (int dy : {0, -1, 1, -2, 2}) {
+        for (int dx : {0, -1, 1, -2, 2}) {
+            const QUrl hit = tryPoint(viewportPos + QPoint(dx, dy));
+            if (hit.isValid())
+                return hit;
+        }
     }
     return {};
 }
@@ -565,39 +829,7 @@ void HelpBrowser::contextMenuEvent(QContextMenuEvent *event)
 
 bool HelpBrowser::isNonLinkViewportClick(const QPoint &viewportPos) const
 {
-    if (linkAtViewportPos(viewportPos).isValid())
-        return false;
-    const QTextCursor cur = cursorForPosition(viewportPos);
-    if (cur.isNull())
-        return true;
-    const QRect caret = cursorRect(cur);
-    return !caret.contains(viewportPos);
-}
-
-void HelpBrowser::mousePressEvent(QMouseEvent *event)
-{
-    QScrollBar *bar = verticalScrollBar();
-    const int savedScroll = bar ? bar->value() : 0;
-    const bool blankClick = event->button() == Qt::LeftButton && viewport()
-        && isNonLinkViewportClick(viewport()->mapFrom(this, event->pos()));
-
-    QTextBrowser::mousePressEvent(event);
-
-    if (blankClick && bar) {
-        const int saved = savedScroll;
-        QTimer::singleShot(0, bar, [bar, saved] { bar->setValue(saved); });
-    }
-}
-
-void HelpBrowser::focusInEvent(QFocusEvent *event)
-{
-    QScrollBar *bar = verticalScrollBar();
-    m_focusScrollValue = bar ? bar->value() : 0;
-    QTextBrowser::focusInEvent(event);
-    if (bar) {
-        const int saved = m_focusScrollValue;
-        QTimer::singleShot(0, bar, [bar, saved] { bar->setValue(saved); });
-    }
+    return !linkAtViewportPos(viewportPos).isValid();
 }
 
 void HelpBrowser::wheelEvent(QWheelEvent *event)
@@ -614,18 +846,58 @@ void HelpBrowser::wheelEvent(QWheelEvent *event)
     QTextBrowser::wheelEvent(event);
 }
 
+bool HelpBrowser::handleMouseHistoryButtons(QMouseEvent *event)
+{
+    if (event->type() != QEvent::MouseButtonPress)
+        return false;
+    if (isMouseBackButton(event->button())) {
+        if (canGoBack())
+            backward();
+        event->accept();
+        return true;
+    }
+    if (isMouseForwardButton(event->button())) {
+        if (canGoForward())
+            forward();
+        event->accept();
+        return true;
+    }
+    return false;
+}
+
+void HelpBrowser::mousePressEvent(QMouseEvent *event)
+{
+    if (handleMouseHistoryButtons(event))
+        return;
+    if (event->button() == Qt::LeftButton && viewport()) {
+        const QPoint vpPos = viewport()->mapFrom(this, event->pos());
+        if (!linkAtViewportPos(vpPos).isValid()) {
+            QScrollBar *bar = verticalScrollBar();
+            const int savedScroll = bar ? bar->value() : 0;
+            if (textCursor().hasSelection()) {
+                QTextCursor c = cursorForPosition(vpPos);
+                c.clearSelection();
+                setTextCursor(c);
+                if (bar)
+                    bar->setValue(savedScroll);
+                event->accept();
+                return;
+            }
+            QTextBrowser::mousePressEvent(event);
+            if (bar) {
+                const int saved = savedScroll;
+                QTimer::singleShot(0, bar, [bar, saved] { bar->setValue(saved); });
+            }
+            return;
+        }
+    }
+    QTextBrowser::mousePressEvent(event);
+}
+
 void HelpBrowser::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::BackButton) {
-        backward();
-        event->accept();
+    if (handleMouseHistoryButtons(event))
         return;
-    }
-    if (event->button() == Qt::ForwardButton) {
-        forward();
-        event->accept();
-        return;
-    }
     if (event->button() == Qt::LeftButton && viewport()) {
         const QPoint vpPos = viewport()->mapFrom(this, event->pos());
         const QUrl linkUrl = linkAtViewportPos(vpPos);
@@ -697,6 +969,22 @@ QUrl HelpBrowser::resolveLink(const QUrl &name) const
         if (found.isValid())
             candidate = fixed;
     }
+    if (!found.isValid() && base.isValid() && base.scheme() == QStringLiteral("qthelp")) {
+        const QString rel = name.toString();
+        const int hash = rel.indexOf(QLatin1Char('#'));
+        const QString pathPart = hash >= 0 ? rel.left(hash) : rel;
+        if (pathPart.endsWith(QStringLiteral(".html"), Qt::CaseInsensitive)) {
+            QUrl fixed = base;
+            QString dir = fixed.path();
+            dir = dir.left(dir.lastIndexOf(QLatin1Char('/')) + 1);
+            fixed.setPath(dir + pathPart);
+            if (hash >= 0)
+                fixed.setFragment(rel.mid(hash + 1));
+            found = findHelpFile(fixed);
+            if (found.isValid())
+                candidate = fixed;
+        }
+    }
     if (found.isValid()) {
         QUrl withFragment = found;
         withFragment.setFragment(candidate.fragment());
@@ -720,10 +1008,7 @@ static QString stripCodeInlineAttrs(QString html)
 
 static void stripInlineFontSizes(QString &html)
 {
-    static const QRegularExpression fontSizeDecl(
-        QStringLiteral("font-size\\s*:\\s*[^;\"']+;?"),
-        QRegularExpression::CaseInsensitiveOption);
-    html.remove(fontSizeDecl);
+    html.remove(fontSizeDeclRegex());
 }
 
 static void colorizeDocumentHtml(QString &html, bool dark)
@@ -904,5 +1189,6 @@ static QString prepareArticleBodyFromRaw(const QByteArray &data)
         html = injectNamedAnchors(html);
     colorizeDocumentHtml(html, AppTheme::isDarkCode());
     stripInlineFontSizes(html);
+    stripLegacyFontSizes(html);
     return html;
 }

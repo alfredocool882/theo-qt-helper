@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(TheoQtHelper
-    VERSION 1.0.0
+    VERSION 1.0.1
     DESCRIPTION "Offline Qt 6 Simplified Chinese help viewer"
     HOMEPAGE_URL "https://github.com/theo0r1z/theo-qt-helper"
     LANGUAGES CXX

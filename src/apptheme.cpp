@@ -390,9 +390,9 @@ QString documentStyle(int zoomPercent, const QString &id)
         p { margin: 8px 0; color: %7; font-size: %1px; }
         a { color: %8; text-decoration: none; font-size: %1px; }
         a:hover { color: %9; text-decoration: underline; }
-        code { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; background: %13; color: %14; border: 0; padding: 1px 4px; }
-        tt { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
-        .name { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
+        code { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %4px; background: %13; color: %14; border: 0; padding: 1px 4px; }
+        tt { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %4px; }
+        .name { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %4px; }
         div.ide-code, div.pre { margin: 12px 0 20px 0; }
         table.code-panel { border-collapse: collapse; width: 100%; margin: 0; border: 1px solid %16; background: %15; }
         table.code-panel td.code-panel-body { background: %15; padding: 0; border: 0; vertical-align: top; }
@@ -405,7 +405,7 @@ QString documentStyle(int zoomPercent, const QString &id)
         table.api-valuelist tr { background: %19; }
         table.api-valuelist th { background: %20; color: %7; font-weight: 600; padding: 5px 20px; border: 1px solid %18; text-align: left; }
         table.api-valuelist td { background: %19; padding: 5px 20px; border: 1px solid %18; vertical-align: top; color: %7; line-height: 1.3; }
-        table.api-valuelist td.tblval { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
+        table.api-valuelist td.tblval { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %4px; }
         table.api-valuelist code, table.api-valuelist tt { background: transparent; border: 0; padding: 0; color: %7; }
         pre span.keyword, table.code-panel span.keyword { color: %21; font-weight: 600; }
         pre span.type, table.code-panel span.type { color: %22; }
@@ -421,10 +421,11 @@ QString documentStyle(int zoomPercent, const QString &id)
         table.api-table { border: 1px solid %18; }
         td.memItemLeft { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; width: 32%; }
         td.memItemRight { font-size: %1px; }
-        .memItemLeft { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; color: %7; }
+        .memItemLeft { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %4px; color: %7; }
         .memItemRight { font-size: %1px; color: %7; }
         div.ide-code span, pre span, table.code-panel span { background: transparent; }
-        .memItemRight b, .memItemRight .name { color: %29; font-weight: 600; }
+        .memItemRight b, .memItemRight .name { color: %7; font-weight: 600; }
+        .memItemRight a { color: %8; }
         .memItemRight .type a { color: %30; }
         .header, .footer, .b-sidebar__sidebar, .b-sidebar__topbar, .b-sidebar__content__right, .qds-page-header, .c-sidebar-navigation, .admonition-title, .toc, #sidebar-toctree { display: none; }
         .landing { font-size: %1px; color: %7; }

@@ -5,7 +5,6 @@
 class QContextMenuEvent;
 class DocumentPane;
 class QHelpEngineCore;
-class QFocusEvent;
 class QMouseEvent;
 class QWheelEvent;
 class QUrl;
@@ -38,8 +37,16 @@ public:
     void detachFromPane();
     DocumentPane *ownerPane() const { return m_ownerPane; }
 
+    void setSource(const QUrl &name,
+                   QTextDocument::ResourceType type = QTextDocument::UnknownResource);
+    void backward();
+    void forward();
+    bool canGoBack() const;
+    bool canGoForward() const;
+
 signals:
     void linkNavigateRequested(const QUrl &url, HelpBrowser::NavMode mode);
+    void navigationHistoryChanged();
 
 private:
     static void setGlobalZoomPercent(int percent);
@@ -51,6 +58,11 @@ private:
     QUrl pageSource() const;
     QUrl canonicalPageUrl(const QUrl &url) const;
     void restoreScrollAfterZoom();
+    QUrl historyUrl(const QUrl &url) const;
+    void pushPageHistory(const QUrl &url);
+    void restorePageAt(int index);
+    void notifyHistoryChanged();
+    bool handleMouseHistoryButtons(QMouseEvent *event);
 
     QUrl linkAtViewportPos(const QPoint &viewportPos) const;
     bool isNonLinkViewportClick(const QPoint &viewportPos) const;
@@ -62,7 +74,6 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
-    void focusInEvent(QFocusEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
     QUrl resolveLink(const QUrl &name) const;
@@ -78,5 +89,11 @@ protected:
     int m_zoomScrollValue = 0;
     int m_zoomScrollOldMax = 0;
     bool m_pendingScrollRestore = false;
-    int m_focusScrollValue = 0;
+    struct NavEntry {
+        QUrl url;
+        int scrollY = 0;
+    };
+    QList<NavEntry> m_pageHistory;
+    int m_historyIndex = -1;
+    bool m_restoringHistory = false;
 };

@@ -1,4 +1,5 @@
 ﻿#include "mainwindow.h"
+#include "mousebuttons.h"
 #include "apptheme.h"
 #include "documentpane.h"
 #include "helpbrowser.h"
@@ -384,18 +385,23 @@ MainWindow::~MainWindow()
 
 bool MainWindow::eventFilter(QObject *object, QEvent *event)
 {
-    if (event->type() == QEvent::MouseButtonRelease) {
+    if (isMouseHistoryPress(event) && isActiveWindow()) {
         QWidget *widget = qobject_cast<QWidget *>(object);
-        if (!widget || (widget != this && !isAncestorOf(widget)))
-            return QMainWindow::eventFilter(object, event);
-        QMouseEvent *mouse = static_cast<QMouseEvent *>(event);
-        if (mouse->button() == Qt::BackButton && m_backAction && m_backAction->isEnabled()) {
-            m_backAction->trigger();
-            return true;
-        }
-        if (mouse->button() == Qt::ForwardButton && m_forwardAction && m_forwardAction->isEnabled()) {
-            m_forwardAction->trigger();
-            return true;
+        if (widget && (widget == this || isAncestorOf(widget))) {
+            QMouseEvent *mouse = static_cast<QMouseEvent *>(event);
+            HelpBrowser *browser = currentBrowser();
+            if (browser) {
+                if (isMouseBackButton(mouse->button())) {
+                    if (browser->canGoBack())
+                        browser->backward();
+                    return true;
+                }
+                if (isMouseForwardButton(mouse->button())) {
+                    if (browser->canGoForward())
+                        browser->forward();
+                    return true;
+                }
+            }
         }
     }
     return QMainWindow::eventFilter(object, event);
@@ -2522,8 +2528,8 @@ void MainWindow::updateChromeState()
 {
     HelpBrowser *browser = currentBrowser();
     const bool hasBrowser = browser != nullptr;
-    m_backAction->setEnabled(hasBrowser && browser->isBackwardAvailable());
-    m_forwardAction->setEnabled(hasBrowser && browser->isForwardAvailable());
+    m_backAction->setEnabled(hasBrowser && browser->canGoBack());
+    m_forwardAction->setEnabled(hasBrowser && browser->canGoForward());
     DocumentPane *pane = activePane();
     m_closePageAction->setEnabled(pane && pane->tabWidget()->count() > 0);
     m_clearPagesAction->setEnabled(hasBrowser);

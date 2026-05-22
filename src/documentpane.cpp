@@ -142,6 +142,11 @@ void DocumentPane::onBrowserSourceChanged(const QUrl &)
     scheduleStateChanged();
 }
 
+void DocumentPane::onBrowserHistoryChanged()
+{
+    scheduleStateChanged();
+}
+
 HelpBrowser *DocumentPane::currentBrowser() const
 {
     return qobject_cast<HelpBrowser *>(m_tabs->currentWidget());
