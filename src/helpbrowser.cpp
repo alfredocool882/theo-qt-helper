@@ -854,7 +854,7 @@ void HelpBrowser::mousePressEvent(QMouseEvent *event)
             return;
         }
     } else {
-        m_pressLinkUrl = {};
+        m_pressLinkUrl = QUrl();
     }
     QTextBrowser::mousePressEvent(event);
 }
@@ -867,7 +867,7 @@ void HelpBrowser::mouseReleaseEvent(QMouseEvent *event)
         const QPoint vpPos = viewport()->mapFrom(this, event->pos());
         const QUrl releaseLink = linkAtViewportPos(vpPos);
         const QUrl linkUrl = m_pressLinkUrl.isValid() && m_pressLinkUrl == releaseLink ? releaseLink : QUrl();
-        m_pressLinkUrl = {};
+        m_pressLinkUrl = QUrl();
         if (linkUrl.isValid()) {
             const bool newTab = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
             requestNavigation(linkUrl, newTab ? NavMode::NewTab : NavMode::SameTab);
