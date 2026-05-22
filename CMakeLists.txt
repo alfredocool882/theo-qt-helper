@@ -63,6 +63,7 @@ target_link_libraries(TheoQtHelper PRIVATE
 )
 
 if(WIN32)
+    set_target_properties(TheoQtHelper PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(TheoQtHelper PRIVATE dwmapi)
     if(EXISTS "${CMAKE_SOURCE_DIR}/assets/app.rc")
         target_sources(TheoQtHelper PRIVATE assets/app.rc)
