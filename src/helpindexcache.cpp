@@ -7,8 +7,40 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-
 namespace HelpIndexCache {
+
+static QString stripIndexDecorations(QString name)
+{
+    name = name.trimmed();
+    const int pipe = name.indexOf(QStringLiteral(" | "));
+    if (pipe > 0)
+        name = name.left(pipe).trimmed();
+    static const QStringList suffixes = {
+        QStringLiteral(" Class Reference"),
+        QStringLiteral(" Class"),
+        QStringLiteral(" 类"),
+    };
+    for (const QString &suffix : suffixes) {
+        if (name.endsWith(suffix, Qt::CaseInsensitive)) {
+            name.chop(suffix.size());
+            name = name.trimmed();
+            break;
+        }
+    }
+    return name;
+}
+
+static bool looksLikeQtType(const QString &name)
+{
+    if (name.size() < 2 || name.at(0) != QLatin1Char('Q'))
+        return false;
+    for (int i = 1; i < name.size(); ++i) {
+        const QChar c = name.at(i);
+        if (!c.isLetterOrNumber() && c != QLatin1Char('_'))
+            return false;
+    }
+    return true;
+}
 
 static QString canonicalIndexKey(const QString &keyword)
 {
@@ -18,15 +50,9 @@ static QString canonicalIndexKey(const QString &keyword)
         const QString member = keyword.mid(sep + 2);
         if (member == cls || member == QLatin1String("~") + cls)
             return cls.toCaseFolded();
-        return keyword.toCaseFolded();
+        return (cls + QStringLiteral("::") + member).toCaseFolded();
     }
-    QString name = keyword;
-    const int pipe = name.indexOf(QStringLiteral(" | "));
-    if (pipe > 0)
-        name = name.left(pipe).trimmed();
-    if (name.endsWith(QStringLiteral(" Class"), Qt::CaseInsensitive))
-        name.chop(6);
-    return name.trimmed().toCaseFolded();
+    return stripIndexDecorations(keyword).toCaseFolded();
 }
 
 static int indexKeywordPreference(const QString &keyword)
@@ -41,11 +67,32 @@ static int indexKeywordPreference(const QString &keyword)
             return 1;
         return 10;
     }
+    const QString stripped = stripIndexDecorations(keyword);
     if (keyword.contains(QStringLiteral(" | ")))
         return 100;
-    if (keyword.endsWith(QStringLiteral(" Class"), Qt::CaseInsensitive))
-        return 50;
-    return 20;
+    if (keyword != stripped)
+        return 55;
+    if (looksLikeQtType(stripped) && !stripped.contains(QLatin1Char(' ')))
+        return 20;
+    return 40;
+}
+
+static QString normalizeStoredKeyword(const QString &keyword)
+{
+    const int sep = keyword.indexOf(QStringLiteral("::"));
+    if (sep >= 0) {
+        const QString cls = keyword.left(sep);
+        const QString member = keyword.mid(sep + 2);
+        if (member == cls)
+            return cls + QStringLiteral("::") + cls;
+        if (member.startsWith(QLatin1Char('~')) && member.mid(1) == cls)
+            return keyword;
+        return cls + QStringLiteral("::") + member;
+    }
+    const QString base = stripIndexDecorations(keyword);
+    if (looksLikeQtType(base) && !base.contains(QLatin1Char(' ')))
+        return base + QStringLiteral("::") + base;
+    return base.isEmpty() ? keyword : base;
 }
 
 QStringList dedupeKeywords(const QStringList &keywords)
@@ -57,6 +104,8 @@ QStringList dedupeKeywords(const QStringList &keywords)
         if (kw.isEmpty())
             continue;
         const QString key = canonicalIndexKey(kw);
+        if (key.isEmpty())
+            continue;
         const int rank = indexKeywordPreference(kw);
         const auto it = bestRank.constFind(key);
         if (it == bestRank.constEnd() || rank < *it) {
@@ -64,7 +113,11 @@ QStringList dedupeKeywords(const QStringList &keywords)
             best.insert(key, kw);
         }
     }
-    QStringList out = best.values();
+    QStringList out;
+    out.reserve(best.size());
+    for (const QString &kw : best)
+        out.append(normalizeStoredKeyword(kw));
+    out.removeDuplicates();
     out.sort(Qt::CaseInsensitive);
     return out;
 }
@@ -127,6 +180,7 @@ bool writeKeywordMeta(const QString &collectionPath, const QFileInfo &qchInfo, i
         return false;
     QJsonObject root;
     root.insert(QStringLiteral("version"), 1);
+    root.insert(QStringLiteral("dedupeVersion"), 2);
     root.insert(QStringLiteral("qchSize"), qchInfo.size());
     root.insert(QStringLiteral("qchModified"), qchInfo.lastModified().toString(Qt::ISODate));
     root.insert(QStringLiteral("keywordCount"), keywordCount);
@@ -184,6 +238,7 @@ bool saveKeywords(const QString &collectionPath, const QFileInfo &qchInfo,
         return false;
     QJsonObject root;
     root.insert(QStringLiteral("version"), 1);
+    root.insert(QStringLiteral("dedupeVersion"), 2);
     root.insert(QStringLiteral("qchSize"), qchInfo.size());
     root.insert(QStringLiteral("qchModified"), qchInfo.lastModified().toString(Qt::ISODate));
     QJsonArray arr;
