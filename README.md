@@ -9,7 +9,7 @@
 
 **English** · [中文说明](#中文说明)
 
-**Theo Qt Helper** is an offline **Qt 6 Simplified Chinese API** documentation viewer — built for developers who read Qt docs every day. It goes beyond Qt Assistant with **multi-pane tiling**, **multi-version document management**, and a **fast class-oriented index**.
+**Theo Qt Helper** is an offline **Qt 6 Simplified Chinese API** documentation viewer — built for developers who read Qt docs every day. It goes beyond Qt Assistant with **multi-pane tiling**, **multi-version document management**, a **fast class-oriented index**, and **always-on-top** (pin the help window above your IDE — something native Qt Help / Assistant still lacks).
 
 **Keywords:** Qt help documentation · Qt offline docs · Qt Chinese API docs · Qt Assistant alternative · `.qch` / `.qhc` viewer · 简体中文 Qt 文档
 
@@ -39,12 +39,16 @@ The **index** tab is tuned for API lookup: type a prefix like `QPush` and jump t
 
 ![Index filter — fast class and member lookup](docs/screenshots/index-filter.png)
 
-## More features
+### Always on top — keep docs above your IDE
+
+**Qt Assistant and the built-in help viewer do not offer a reliable “stay on top” mode.** Theo Qt Helper adds a one-click **pin** (toolbar or View menu → **Stay on top**): the help window stays above Qt Creator, Visual Studio, or any editor while you code. The setting is **remembered** across sessions.
+
+### More features
 
 | Category | Details |
 |----------|---------|
 | **Navigation** | Content tree, bookmarks, full-text search, back/forward history |
-| **Appearance** | **Light / dark** themes (View → Theme), page zoom, optional always-on-top |
+| **Appearance** | **Light / dark** themes (View → Theme), page zoom, **always-on-top (pin)** |
 | **Productivity** | Sync table of contents with the current page, in-page find, print |
 | **Layout** | Per-pane tabs, session restore (panes + tabs + window geometry) |
 | **Input** | Mouse back/forward buttons (when focus is in the app) |
@@ -161,7 +165,7 @@ Copyright © 2025 Theo Zhao. Released under the [MIT License](LICENSE).
 
 [English](#theo-qt-helper)
 
-**Theo Qt Helper** 是一款 **Qt 6 简体中文 API 文档** 离线阅读器，面向日常查文档的 Qt 开发者。相比 Qt Assistant，它的核心是：**文档多分屏并排阅读**、**多版本文档管理**、**面向类与成员的高速索引**。
+**Theo Qt Helper** 是一款 **Qt 6 简体中文 API 文档** 离线阅读器，面向日常查文档的 Qt 开发者。相比 Qt Assistant，它的核心是：**文档多分屏并排阅读**、**多版本文档管理**、**面向类与成员的高速索引**，以及 **窗口置顶**（边写代码边查文档——这是 Qt 原生帮助最缺的能力）。
 
 **关键词：** Qt 帮助文档 · Qt 中文帮助文档 · Qt 离线文档 · Qt 中文 API · Qt Assistant 替代 · `.qch` / `.qhc` 阅读器
 
@@ -191,12 +195,16 @@ Copyright © 2025 Theo Zhao. Released under the [MIT License](LICENSE).
 
 ![索引过滤 — 快速定位类与成员](docs/screenshots/index-filter.png)
 
+#### 窗口置顶 — Qt 原生帮助最缺的能力
+
+**Qt Assistant 与 IDE 内置帮助没有好用的「总在最前」模式。** Theo Qt Helper 提供一键 **窗口置顶**（工具栏图钉或 视图 → **窗口置顶**）：文档窗口始终浮在 Qt Creator、Visual Studio 等编辑器之上，边编码边查 API。置顶状态会 **自动保存**，下次启动仍然生效。
+
 ### 更多功能
 
 | 类别 | 说明 |
 |------|------|
 | **导航** | 内容树、书签、全文搜索、前进/后退历史 |
-| **外观** | **浅色 / 深色** 主题（视图 → 主题）、页面缩放、窗口置顶 |
+| **外观** | **浅色 / 深色** 主题（视图 → 主题）、页面缩放、**窗口置顶** |
 | **效率** | 目录与当前页同步、页内查找、打印 |
 | **布局** | 每窗格多标签、会话恢复（窗格 + 标签 + 窗口位置） |
 | **输入** | 鼠标侧键后退/前进（焦点在本应用内时） |
