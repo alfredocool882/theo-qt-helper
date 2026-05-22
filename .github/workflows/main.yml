@@ -21,7 +21,7 @@ jobs:
       - name: Build
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build
+          sudo apt-get install -y cmake ninja-build libcups2-dev
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
@@ -39,7 +39,7 @@ jobs:
           Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\python3.exe" -Force -ErrorAction SilentlyContinue
       - uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.3"
+          version: "6.8.2"
           host: windows
           target: desktop
           arch: win64_msvc2022_64
