@@ -133,6 +133,11 @@ protected:
                 event->accept();
                 return;
             }
+            if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+                emit returnPressed();
+                event->accept();
+                return;
+            }
         }
         QLineEdit::keyPressEvent(event);
     }
@@ -739,9 +744,12 @@ void MainWindow::createDock()
             activateIndexKeyword(m_indexResults->currentItem()->data(Qt::UserRole).toString());
     });
     connect(m_indexFilterTimer, &QTimer::timeout, this, &MainWindow::refreshIndexResults);
-    connect(m_indexResults, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
-        activateIndexKeyword(item->data(Qt::UserRole).toString());
-    });
+    auto openIndexItem = [this](QListWidgetItem *item) {
+        if (item)
+            activateIndexKeyword(item->data(Qt::UserRole).toString());
+    };
+    connect(m_indexResults, &QListWidget::itemActivated, this, openIndexItem);
+    connect(m_indexResults, &QListWidget::itemDoubleClicked, this, openIndexItem);
     connect(m_helpEngine->indexModel(), &QHelpIndexModel::indexCreated, this, [this] {
         m_keywordIndexModelReady = true;
         if (!m_keywordCacheLoaded)
@@ -2207,6 +2215,28 @@ static int indexLinkScore(const QString &keyword, const QHelpLink &link)
     return score;
 }
 
+static QStringList indexKeywordLookupKeys(const QString &keyword)
+{
+    QStringList keys;
+    auto add = [&keys](const QString &k) {
+        if (!k.isEmpty() && !keys.contains(k))
+            keys.append(k);
+    };
+    add(keyword);
+    const int sep = keyword.indexOf(QStringLiteral("::"));
+    if (sep >= 0) {
+        const QString cls = keyword.left(sep);
+        const QString member = keyword.mid(sep + 2);
+        if (member == cls) {
+            add(cls);
+            add(cls + QStringLiteral(" Class"));
+        }
+    } else if (keyword.size() >= 2 && keyword.at(0) == QLatin1Char('Q')) {
+        add(keyword + QStringLiteral("::") + keyword);
+    }
+    return keys;
+}
+
 static QList<QHelpLink> preferredIndexLinks(const QString &keyword, const QList<QHelpLink> &links)
 {
     if (links.size() <= 1)
@@ -2264,15 +2294,22 @@ void MainWindow::activateIndexKeyword(const QString &keyword)
         statusBar()->showMessage(tr("索引链接数据仍在加载，请稍后重试"), 4000);
         return;
     }
-    const QList<QHelpLink> links =
-        preferredIndexLinks(keyword, dedupeHelpLinks(m_helpEngine->documentsForKeyword(keyword)));
+    QList<QHelpLink> links;
+    for (const QString &key : indexKeywordLookupKeys(keyword)) {
+        links = preferredIndexLinks(
+            keyword, dedupeHelpLinks(m_helpEngine->documentsForKeyword(key)));
+        if (!links.isEmpty())
+            break;
+    }
     if (links.size() == 1) {
         const bool newTab = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
         openUrl(indexUrlForKeyword(keyword, links.first()), newTab);
         return;
     }
-    if (links.isEmpty())
+    if (links.isEmpty()) {
+        statusBar()->showMessage(tr("未找到“%1”的文档").arg(keyword), 4000);
         return;
+    }
 
     QDialog dialog(this);
     dialog.setWindowTitle(tr("选择文档"));

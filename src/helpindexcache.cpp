@@ -77,24 +77,6 @@ static int indexKeywordPreference(const QString &keyword)
     return 40;
 }
 
-static QString normalizeStoredKeyword(const QString &keyword)
-{
-    const int sep = keyword.indexOf(QStringLiteral("::"));
-    if (sep >= 0) {
-        const QString cls = keyword.left(sep);
-        const QString member = keyword.mid(sep + 2);
-        if (member == cls)
-            return cls + QStringLiteral("::") + cls;
-        if (member.startsWith(QLatin1Char('~')) && member.mid(1) == cls)
-            return keyword;
-        return cls + QStringLiteral("::") + member;
-    }
-    const QString base = stripIndexDecorations(keyword);
-    if (looksLikeQtType(base) && !base.contains(QLatin1Char(' ')))
-        return base + QStringLiteral("::") + base;
-    return base.isEmpty() ? keyword : base;
-}
-
 QStringList dedupeKeywords(const QStringList &keywords)
 {
     QHash<QString, QString> best;
@@ -113,10 +95,7 @@ QStringList dedupeKeywords(const QStringList &keywords)
             best.insert(key, kw);
         }
     }
-    QStringList out;
-    out.reserve(best.size());
-    for (const QString &kw : best)
-        out.append(normalizeStoredKeyword(kw));
+    QStringList out = best.values();
     out.removeDuplicates();
     out.sort(Qt::CaseInsensitive);
     return out;
