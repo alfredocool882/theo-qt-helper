@@ -9,7 +9,7 @@
 
 **English** · [中文说明](#中文说明)
 
-Theo Qt Helper is a cross-platform desktop application for browsing **Qt 6 Simplified Chinese** API documentation offline. Built with Qt 6 and CMake, it provides an Assistant-style workflow: table of contents, index, full-text search, bookmarks, and a multi-pane tabbed layout for reading and comparing topics.
+**Theo Qt Helper** is an offline **Qt 6 Simplified Chinese API** documentation viewer — built for developers who read Qt docs every day. It goes beyond Qt Assistant with **multi-pane tiling**, **multi-version document management**, and a **fast class-oriented index**.
 
 **Keywords:** Qt help documentation · Qt offline docs · Qt Chinese API docs · Qt Assistant alternative · `.qch` / `.qhc` viewer · 简体中文 Qt 文档
 
@@ -19,18 +19,42 @@ Theo Qt Helper is a cross-platform desktop application for browsing **Qt 6 Simpl
 | **Prebuilt package** | Windows x64 only — [GitHub Releases](https://github.com/theo0r1z/theo-qt-helper/releases) |
 | **Source in this repo** | Application source only (no bundled `.qch` help) |
 
+## Highlights
+
+### Multi-pane reading — compare docs side by side
+
+Drag tabs to **split panes** (left / right / top / bottom). Open **multiple pages in multiple panes** at once — e.g. overview + class reference + obsolete members — without leaving the app. The **Open pages** list tracks every tab in every pane.
+
+![Multi-pane layout with drag-to-split](docs/screenshots/multi-pane.png)
+
+### Document management — multiple Qt versions in one app
+
+Install, switch, and remove **Qt Chinese help collections** (6.5 / 6.8 / 6.10 / 6.11 …). Refresh the online version list, download a new `.qch` bundle, or delete local packages to save disk space — then **switch the active collection in one click**.
+
+![Document manager — local and downloadable Qt versions](docs/screenshots/doc-manager.png)
+
+### Smart index — find classes and members instantly
+
+The **index** tab is tuned for API lookup: type a prefix like `QPush` and jump to `QPushButton`, members, and related entries. Filtering focuses on **classes and members** (not noise from every HTML page). **Ctrl+I** focuses the index; ambiguous keywords show a pick list.
+
+![Index filter — fast class and member lookup](docs/screenshots/index-filter.png)
+
+## More features
+
+| Category | Details |
+|----------|---------|
+| **Navigation** | Content tree, bookmarks, full-text search, back/forward history |
+| **Appearance** | **Light / dark** themes (View → Theme), page zoom, optional always-on-top |
+| **Productivity** | Sync table of contents with the current page, in-page find, print |
+| **Layout** | Per-pane tabs, session restore (panes + tabs + window geometry) |
+| **Input** | Mouse back/forward buttons (when focus is in the app) |
+| **Platform** | Windows (prebuilt), Linux and macOS from source |
+
 ## Screenshots
 
-![Main window — navigation, toolbar, and documentation view](docs/screenshots/main-window.png)
-
-## Features
-
-- Offline Qt Help (`.qch` / `.qhc`) with a Chinese UI
-- Content tree, keyword index, full-text search, and bookmarks
-- Multi-tab and multi-pane layouts with drag-and-drop split
-- Index filter oriented toward classes and members
-- Page zoom, print, always-on-top, and light/dark themes
-- Session restore for open tabs and window layout
+| Multi-pane | Document manager | Index |
+|:---:|:---:|:---:|
+| ![Multi-pane](docs/screenshots/multi-pane.png) | ![Doc manager](docs/screenshots/doc-manager.png) | ![Index](docs/screenshots/index-filter.png) |
 
 ## Download (Windows x64)
 
@@ -137,7 +161,7 @@ Copyright © 2025 Theo Zhao. Released under the [MIT License](LICENSE).
 
 [English](#theo-qt-helper)
 
-**Theo Qt Helper** 是一款跨平台 **Qt 6 简体中文版 API 文档** 离线阅读器，基于 Qt 6 与 CMake 构建。提供接近 Qt Assistant 的使用体验：目录、索引、全文检索、书签，以及多分栏标签页布局，便于对照阅读。
+**Theo Qt Helper** 是一款 **Qt 6 简体中文 API 文档** 离线阅读器，面向日常查文档的 Qt 开发者。相比 Qt Assistant，它的核心是：**文档多分屏并排阅读**、**多版本文档管理**、**面向类与成员的高速索引**。
 
 **关键词：** Qt 帮助文档 · Qt 中文帮助文档 · Qt 离线文档 · Qt 中文 API · Qt Assistant 替代 · `.qch` / `.qhc` 阅读器
 
@@ -147,18 +171,42 @@ Copyright © 2025 Theo Zhao. Released under the [MIT License](LICENSE).
 | **预编译包** | 仅 Windows x64 — [GitHub Releases](https://github.com/theo0r1z/theo-qt-helper/releases) |
 | **本仓库内容** | 仅应用程序源码（不含 `.qch` 文档包） |
 
+### 核心亮点
+
+#### 多分屏并排阅读 — 对照查文档
+
+标签页可 **拖拽分屏**（左 / 右 / 上 / 下），同时打开多个窗格、多个页面，例如总览 + 类参考 + 废弃成员对照查看。**打开的页面** 列表会列出每个窗格里的全部标签，一键切换。
+
+![多分屏拖拽分栏](docs/screenshots/multi-pane.png)
+
+#### 文档管理 — 多版本 Qt 中文帮助一站切换
+
+在应用内 **安装、切换、删除** 各版本 Qt 中文文档（6.5 / 6.8 / 6.10 / 6.11 …）。可联网刷新官方版本列表、下载新 `.qch` 包，或删除本地包释放空间，**一键切换当前文档集**。
+
+![文档管理 — 本地与可下载版本](docs/screenshots/doc-manager.png)
+
+#### 智能索引 — 类名、成员名秒搜
+
+**索引** 页针对 API 查阅优化：输入 `QPush` 即可筛到 `QPushButton` 及成员等条目，过滤侧重 **类与成员**，减少无关页面干扰。**Ctrl+I** 快速聚焦索引；关键字对应多页时会弹出选择列表。
+
+![索引过滤 — 快速定位类与成员](docs/screenshots/index-filter.png)
+
+### 更多功能
+
+| 类别 | 说明 |
+|------|------|
+| **导航** | 内容树、书签、全文搜索、前进/后退历史 |
+| **外观** | **浅色 / 深色** 主题（视图 → 主题）、页面缩放、窗口置顶 |
+| **效率** | 目录与当前页同步、页内查找、打印 |
+| **布局** | 每窗格多标签、会话恢复（窗格 + 标签 + 窗口位置） |
+| **输入** | 鼠标侧键后退/前进（焦点在本应用内时） |
+| **平台** | Windows 预编译包；Linux / macOS 可从源码构建 |
+
 ### 界面截图
 
-![主界面 — 导航、工具栏与文档阅读区](docs/screenshots/main-window.png)
-
-### 功能
-
-- 离线 Qt Help（`.qch` / `.qhc`），中文界面
-- 内容树、关键字索引、全文搜索、书签
-- 多标签、多分栏，支持拖拽分屏
-- 面向类与成员的索引过滤
-- 页面缩放、打印、窗口置顶、浅色/深色主题
-- 会话恢复（已打开标签与窗口布局）
+| 多分屏 | 文档管理 | 索引 |
+|:---:|:---:|:---:|
+| ![多分屏](docs/screenshots/multi-pane.png) | ![文档管理](docs/screenshots/doc-manager.png) | ![索引](docs/screenshots/index-filter.png) |
 
 ### 下载（Windows x64）
 
