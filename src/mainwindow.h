@@ -20,9 +20,17 @@ class QTabWidget;
 class QTimer;
 class QActionGroup;
 
+#ifdef THEO_UI_TEST
+class UiTestDriver;
+#endif
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
+
+#ifdef THEO_UI_TEST
+    friend class UiTestDriver;
+#endif
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);

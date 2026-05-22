@@ -33,6 +33,10 @@ public:
     void refreshStyle();
     static void clearRenderCache();
 
+#ifdef THEO_SMOKE_TEST
+    bool smokeLoadPage(const QUrl &url);
+#endif
+
     void attachToPane(DocumentPane *pane);
     void detachFromPane();
     DocumentPane *ownerPane() const { return m_ownerPane; }
@@ -96,4 +100,5 @@ protected:
     QList<NavEntry> m_pageHistory;
     int m_historyIndex = -1;
     bool m_restoringHistory = false;
+    QUrl m_pressLinkUrl;
 };

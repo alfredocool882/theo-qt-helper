@@ -252,6 +252,16 @@ void HelpBrowser::clearRenderCache()
     articleCache().clear();
 }
 
+#ifdef THEO_SMOKE_TEST
+bool HelpBrowser::smokeLoadPage(const QUrl &url)
+{
+    if (!url.isValid())
+        return false;
+    doSetSource(url, QTextDocument::UnknownResource);
+    return document() && document()->characterCount() > 200;
+}
+#endif
+
 int HelpBrowser::globalZoomPercent()
 {
     if (cachedGlobalZoom() < 0) {
@@ -739,59 +749,17 @@ void HelpBrowser::detachFromPane()
 
 QUrl HelpBrowser::linkAtViewportPos(const QPoint &viewportPos) const
 {
-    const auto linkFromFmt = [this](const QTextCharFormat &fmt) -> QUrl {
-        if (!fmt.isAnchor())
-            return {};
-        const QString href = fmt.anchorHref();
-        if (href.isEmpty())
-            return {};
-        QUrl target = href.startsWith(QLatin1Char('#'))
-            ? pageSource().resolved(QUrl(href))
-            : resolveLink(QUrl(href));
-        if (!target.isValid())
-            target = resolveLink(QUrl(href));
-        if (target.isValid() && target.scheme() == QStringLiteral("qthelp"))
-            return target;
+    const QString href = anchorAt(viewportPos);
+    if (href.isEmpty())
         return {};
-    };
 
-    const auto tryPoint = [this, &linkFromFmt](const QPoint &p) -> QUrl {
-        const QTextCursor cursor = cursorForPosition(p);
-        if (!cursor.isNull()) {
-            const QUrl fromFmt = linkFromFmt(cursor.charFormat());
-            if (fromFmt.isValid())
-                return fromFmt;
-            QTextCursor probe = cursor;
-            probe.movePosition(QTextCursor::Left, QTextCursor::KeepAnchor, 1);
-            const QUrl fromLeft = linkFromFmt(probe.charFormat());
-            if (fromLeft.isValid())
-                return fromLeft;
-            probe = cursor;
-            probe.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, 1);
-            const QUrl fromRight = linkFromFmt(probe.charFormat());
-            if (fromRight.isValid())
-                return fromRight;
-        }
-        const QString anchorName = anchorAt(p);
-        if (!anchorName.isEmpty()) {
-            QUrl page = pageSource();
-            if (page.isValid()) {
-                page.setFragment(anchorName);
-                const QUrl resolved = resolveLink(page);
-                if (resolved.isValid() && resolved.scheme() == QStringLiteral("qthelp"))
-                    return resolved;
-            }
-        }
-        return {};
-    };
-
-    for (int dy : {0, -1, 1, -2, 2}) {
-        for (int dx : {0, -1, 1, -2, 2}) {
-            const QUrl hit = tryPoint(viewportPos + QPoint(dx, dy));
-            if (hit.isValid())
-                return hit;
-        }
-    }
+    QUrl target = href.startsWith(QLatin1Char('#'))
+        ? pageSource().resolved(QUrl(href))
+        : resolveLink(QUrl(href));
+    if (!target.isValid())
+        target = resolveLink(QUrl(href));
+    if (target.isValid() && target.scheme() == QStringLiteral("qthelp"))
+        return target;
     return {};
 }
 
@@ -871,7 +839,8 @@ void HelpBrowser::mousePressEvent(QMouseEvent *event)
         return;
     if (event->button() == Qt::LeftButton && viewport()) {
         const QPoint vpPos = viewport()->mapFrom(this, event->pos());
-        if (!linkAtViewportPos(vpPos).isValid()) {
+        m_pressLinkUrl = linkAtViewportPos(vpPos);
+        if (!m_pressLinkUrl.isValid()) {
             QScrollBar *bar = verticalScrollBar();
             const int savedScroll = bar ? bar->value() : 0;
             if (textCursor().hasSelection()) {
@@ -880,16 +849,12 @@ void HelpBrowser::mousePressEvent(QMouseEvent *event)
                 setTextCursor(c);
                 if (bar)
                     bar->setValue(savedScroll);
-                event->accept();
-                return;
             }
-            QTextBrowser::mousePressEvent(event);
-            if (bar) {
-                const int saved = savedScroll;
-                QTimer::singleShot(0, bar, [bar, saved] { bar->setValue(saved); });
-            }
+            event->accept();
             return;
         }
+    } else {
+        m_pressLinkUrl = {};
     }
     QTextBrowser::mousePressEvent(event);
 }
@@ -900,17 +865,17 @@ void HelpBrowser::mouseReleaseEvent(QMouseEvent *event)
         return;
     if (event->button() == Qt::LeftButton && viewport()) {
         const QPoint vpPos = viewport()->mapFrom(this, event->pos());
-        const QUrl linkUrl = linkAtViewportPos(vpPos);
+        const QUrl releaseLink = linkAtViewportPos(vpPos);
+        const QUrl linkUrl = m_pressLinkUrl.isValid() && m_pressLinkUrl == releaseLink ? releaseLink : QUrl();
+        m_pressLinkUrl = {};
         if (linkUrl.isValid()) {
             const bool newTab = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
             requestNavigation(linkUrl, newTab ? NavMode::NewTab : NavMode::SameTab);
             event->accept();
             return;
         }
-        if (isNonLinkViewportClick(vpPos)) {
-            event->accept();
-            return;
-        }
+        event->accept();
+        return;
     }
     QTextBrowser::mouseReleaseEvent(event);
 }
