@@ -88,6 +88,9 @@ private:
     void activateIndexKeyword(const QString &keyword);
     void refreshIndexResults();
     void rebuildIndexCache();
+    void tryLoadBundledKeywordCache();
+    void scheduleKeywordCacheLoad();
+    void applyKeywordCache(QStringList keywords);
     bool isClassLevelIndexKeyword(const QString &keyword) const;
     bool showsInIndexList(const QString &keyword, const QString &foldedQuery) const;
     QUrl indexUrlForKeyword(const QString &keyword, const QHelpLink &link) const;
@@ -114,6 +117,11 @@ private:
     void installDocumentation();
     void manageDocumentation();
     void rebuildSearchIndex();
+    void ensureKeywordIndex();
+    void ensureSearchIndex();
+    void ensureContentTree();
+    void warmKeywordLinkModel();
+    void onSideTabChanged(int index);
     void reloadHelpDocumentation(const QString &collectionPath);
     void applyPinned(bool pinned);
     void applyNavigationVisible(bool visible);
@@ -146,6 +154,15 @@ private:
     QTimer *m_openPagesRefreshTimer = nullptr;
     QStringList m_allIndexKeywords;
     QStringList m_allIndexFolded;
+    QWidget *m_indexPage = nullptr;
+    QWidget *m_searchPage = nullptr;
+    bool m_keywordIndexRequested = false;
+    bool m_keywordIndexModelReady = false;
+    bool m_keywordCacheLoaded = false;
+    bool m_prebuiltIndexes = false;
+    bool m_keywordCacheLoadScheduled = false;
+    bool m_contentTreeReady = false;
+    bool m_searchIndexScheduled = false;
     bool m_restoringSession = false;
     bool m_loadingBookmarks = false;
     bool m_shuttingDown = false;

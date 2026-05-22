@@ -35,6 +35,8 @@ DocumentPane::DocumentPane(QHelpEngineCore *helpEngine, QWidget *parent)
     connect(dragFilter, &TabDragFilter::tabDragFinished, this, &DocumentPane::tabDragFinished);
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, &DocumentPane::closePage);
     connect(m_tabs, &QTabWidget::currentChanged, this, [this](int) {
+        if (HelpBrowser *browser = currentBrowser())
+            browser->syncGlobalZoom();
         emit activated(this);
         if (!m_restoring)
             emit stateChanged();

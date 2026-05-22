@@ -385,18 +385,14 @@ QString documentStyle(int zoomPercent, const QString &id)
         main { max-width: 1120px; margin: 0; padding: 24px 36px 48px 36px; }
         h1 { color: %7; font-size: %2px; font-weight: 700; margin: 4px 0 18px 0; border-bottom: 1px solid %10; padding-bottom: 12px; }
         h2 { color: %7; font-size: %3px; font-weight: 600; margin: 28px 0 12px 0; padding: 0 0 10px 0; border-bottom: 2px solid %10; }
-        div.types h2, div.prop h2, div.func h2 { margin-top: 32px; }
-        h3.api-fn, h3.fn { color: %11; font-size: %4px; font-weight: 600; margin: 18px 0 0 0; padding: 15px 0 12px 0; background: transparent; border: 0; border-bottom: 2px solid %12; line-height: 1.4; }
-        h3.fn .name, h3.api-fn .name { color: %11; font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-weight: 400; }
-        h3.fn code, h3.api-fn code, h3.fn tt, h3.api-fn tt { background: %13; border: 0; padding: 3px; margin: 0 0 0 12px; color: %11; font-size: 0.85em; }
-        h3.fn a, h3.api-fn a, h3.fn span, h3.api-fn span { color: %8; background: transparent; text-decoration: none; padding: 0; margin: 0; }
-        h3.fn i, h3.api-fn i { color: %7; font-style: italic; font-weight: normal; }
         h3 { color: %11; font-size: %4px; font-weight: 600; margin: 18px 0 6px 0; }
-        p { margin: 8px 0; color: %7; }
-        a { color: %8; text-decoration: none; }
+        h3.fn { margin: 18px 0 0 0; padding: 15px 0 12px 0; border: 0; border-bottom: 2px solid %12; line-height: 1.4; }
+        p { margin: 8px 0; color: %7; font-size: %1px; }
+        a { color: %8; text-decoration: none; font-size: %1px; }
         a:hover { color: %9; text-decoration: underline; }
-        code, tt, .name { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
-        code, tt { background: %13; color: %14; border: 0; padding: 1px 4px; }
+        code { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; background: %13; color: %14; border: 0; padding: 1px 4px; }
+        tt { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
+        .name { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
         div.ide-code, div.pre { margin: 12px 0 20px 0; }
         table.code-panel { border-collapse: collapse; width: 100%; margin: 0; border: 1px solid %16; background: %15; }
         table.code-panel td.code-panel-body { background: %15; padding: 0; border: 0; vertical-align: top; }
@@ -409,7 +405,7 @@ QString documentStyle(int zoomPercent, const QString &id)
         table.api-valuelist tr { background: %19; }
         table.api-valuelist th { background: %20; color: %7; font-weight: 600; padding: 5px 20px; border: 1px solid %18; text-align: left; }
         table.api-valuelist td { background: %19; padding: 5px 20px; border: 1px solid %18; vertical-align: top; color: %7; line-height: 1.3; }
-        table.api-valuelist td.tblval { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; }
+        table.api-valuelist td.tblval { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; }
         table.api-valuelist code, table.api-valuelist tt { background: transparent; border: 0; padding: 0; color: %7; }
         pre span.keyword, table.code-panel span.keyword { color: %21; font-weight: 600; }
         pre span.type, table.code-panel span.type { color: %22; }
@@ -419,17 +415,20 @@ QString documentStyle(int zoomPercent, const QString &id)
         pre span.operator, table.code-panel span.operator { color: %26; }
         pre span.preprocessor, table.code-panel span.preprocessor { color: %27; }
         pre a, table.code-panel a { color: %28; text-decoration: none; }
-        table.api-table, table.alignedsummary { border-collapse: collapse; margin: 16px 0 22px 0; width: 100%; border: 1px solid %18; }
-        table { border-collapse: collapse; margin: 16px 0 22px 0; width: 100%; }
-        th { background: %20; color: %7; font-weight: 600; padding: 5px 20px; border: 1px solid %18; }
-        table:not(.code-panel):not(.api-meta-panel):not(.api-valuelist) td { border: 1px solid %18; padding: 5px 20px; vertical-align: top; background: %19; color: %7; line-height: 1.3; }
-        td.memItemLeft, td.memItemRight { padding: 5px 20px; border: 1px solid %18; background: %19; line-height: 1.3; vertical-align: top; }
-        .memItemLeft, .memItemRight { background: %19; font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; color: %7; padding: 5px 20px; line-height: 1.3; vertical-align: top; }
-        .memItemLeft { width: 26%; }
+        table { border-collapse: collapse; margin: 12px 0 18px 0; }
+        th { background: %20; color: %7; font-weight: 600; font-size: %1px; padding: 5px 12px; border: 1px solid %18; }
+        td { background: %19; color: %7; font-size: %1px; padding: 5px 12px; border: 1px solid %18; vertical-align: top; line-height: 1.35; }
+        table.api-table { border: 1px solid %18; }
+        td.memItemLeft { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; width: 32%; }
+        td.memItemRight { font-size: %1px; }
+        .memItemLeft { font-family: "Droid Sans Mono","Cascadia Code",Consolas,monospace; font-size: %5px; color: %7; }
+        .memItemRight { font-size: %1px; color: %7; }
         div.ide-code span, pre span, table.code-panel span { background: transparent; }
         .memItemRight b, .memItemRight .name { color: %29; font-weight: 600; }
         .memItemRight .type a { color: %30; }
-        .header, .footer, .b-sidebar__sidebar, .b-sidebar__topbar, .b-sidebar__content__right, .qds-page-header, .c-sidebar-navigation, .admonition-title, .landing, .toc, #sidebar-toctree { display: none; }
+        .header, .footer, .b-sidebar__sidebar, .b-sidebar__topbar, .b-sidebar__content__right, .qds-page-header, .c-sidebar-navigation, .admonition-title, .toc, #sidebar-toctree { display: none; }
+        .landing { font-size: %1px; color: %7; }
+        .landing a { color: %8; font-size: %1px; }
         img { max-width: 100%; }
     )")
         .arg(14 * scale, 0, 'f', 1)

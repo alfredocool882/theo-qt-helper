@@ -2,6 +2,7 @@
 #include "apptheme.h"
 #include "documentpane.h"
 #include "helpbrowser.h"
+#include "helpindexcache.h"
 #include "splitdropoverlay.h"
 #include "documentmanagerdialog.h"
 
@@ -68,6 +69,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QVector>
+#include <QFutureWatcher>
+#include <QtConcurrent>
 
 #include <utility>
 
@@ -311,6 +314,11 @@ void MainWindow::showEvent(QShowEvent *event)
         }
     }
     QMainWindow::showEvent(event);
+    if (m_prebuiltIndexes) {
+        if (!m_contentTreeReady)
+            QTimer::singleShot(0, this, [this] { ensureContentTree(); });
+        scheduleKeywordCacheLoad();
+    }
     AppTheme::applyWindowFrameTheme(this);
     updateDropOverlayGeometry();
     if (m_navigationDock && m_toggleNavigationAction) {
@@ -489,12 +497,14 @@ void MainWindow::createHelpEngine()
                 QMessageBox::warning(this, tr("注册文档失败"), m_helpEngine->error());
         }
     }
-    if (QHelpContentModel *contentModel = m_helpEngine->contentModel())
+    m_prebuiltIndexes = !qchPath.isEmpty()
+        && HelpIndexCache::prebuiltReady(collectionPath, QFileInfo(qchPath));
+    if (m_prebuiltIndexes) {
+        m_searchIndexScheduled = true;
+    } else if (QHelpContentModel *contentModel = m_helpEngine->contentModel()) {
+        m_contentTreeReady = true;
         contentModel->createContentsForCurrentFilter();
-    if (QHelpIndexModel *indexModel = m_helpEngine->indexModel())
-        indexModel->createIndexForCurrentFilter();
-    if (QHelpSearchEngine *searchEngine = m_helpEngine->searchEngine())
-        searchEngine->scheduleIndexDocumentation();
+    }
 
     if (QSettings().value(QStringLiteral("currentDocCollection")).toString().isEmpty()) {
         const QString bundled = QCoreApplication::applicationDirPath() + QStringLiteral("/docs/qt-6.11/qt-zh.qhc");
@@ -503,6 +513,8 @@ void MainWindow::createHelpEngine()
         else if (QFileInfo::exists(collectionPath))
             QSettings().setValue(QStringLiteral("currentDocCollection"), collectionPath);
     }
+    if (!m_prebuiltIndexes)
+        tryLoadBundledKeywordCache();
 }
 
 void MainWindow::createActions()
@@ -686,11 +698,13 @@ void MainWindow::createDock()
     m_sideTabs = new QTabWidget(dock);
 
     m_sideTabs->addTab(m_helpEngine->contentWidget(), tr("内容"));
+    connect(m_sideTabs, &QTabWidget::currentChanged, this, &MainWindow::onSideTabChanged);
     connect(m_helpEngine->contentWidget(), &QHelpContentWidget::linkActivated, this, [this](const QUrl &url) {
         openUrl(url, (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0);
     });
 
-    QWidget *indexPage = new QWidget(m_sideTabs);
+    m_indexPage = new QWidget(m_sideTabs);
+    QWidget *indexPage = m_indexPage;
     QVBoxLayout *indexLayout = new QVBoxLayout(indexPage);
     indexLayout->setContentsMargins(6, 6, 6, 6);
     indexLayout->setSpacing(5);
@@ -723,14 +737,34 @@ void MainWindow::createDock()
         activateIndexKeyword(item->data(Qt::UserRole).toString());
     });
     connect(m_helpEngine->indexModel(), &QHelpIndexModel::indexCreated, this, [this] {
-        rebuildIndexCache();
+        m_keywordIndexModelReady = true;
+        if (!m_keywordCacheLoaded)
+            rebuildIndexCache();
+        const QString qch = resolveBundledQchPath(m_helpEngine->collectionFile());
+        if (!qch.isEmpty() && !m_prebuiltIndexes)
+            HelpIndexCache::saveKeywords(m_helpEngine->collectionFile(), QFileInfo(qch), m_allIndexKeywords);
         refreshIndexResults();
+        if (m_indexStatus) {
+            if (m_allIndexKeywords.isEmpty())
+                m_indexStatus->setText(tr("索引为空"));
+            else
+                m_indexStatus->setText(tr("输入类名、函数名或前缀，Ctrl+I 聚焦索引"));
+        }
     });
-    rebuildIndexCache();
-    refreshIndexResults();
+    if (m_indexStatus) {
+        if (m_prebuiltIndexes || m_keywordCacheLoaded)
+            m_indexStatus->setText(tr("输入类名、函数名或前缀，Ctrl+I 聚焦索引"));
+        else
+            m_indexStatus->setText(tr("打开本页后加载索引"));
+    }
+    if (m_prebuiltIndexes) {
+        QTimer::singleShot(1500, this, [this] { warmKeywordLinkModel(); });
+    }
     QShortcut *focusIndex = new QShortcut(QKeySequence(QStringLiteral("Ctrl+I")), this);
     connect(focusIndex, &QShortcut::activated, this, [this] {
-        m_sideTabs->setCurrentWidget(m_indexFilter->parentWidget());
+        if (!m_prebuiltIndexes)
+            ensureKeywordIndex();
+        m_sideTabs->setCurrentWidget(m_indexPage);
         m_indexFilter->setFocus();
         m_indexFilter->selectAll();
     });
@@ -759,7 +793,8 @@ void MainWindow::createDock()
     m_sideTabs->addTab(m_bookmarks, tr("书签"));
     loadBookmarks();
 
-    QWidget *searchPage = new QWidget(m_sideTabs);
+    m_searchPage = new QWidget(m_sideTabs);
+    QWidget *searchPage = m_searchPage;
     QVBoxLayout *searchLayout = new QVBoxLayout(searchPage);
     searchLayout->setContentsMargins(6, 6, 6, 6);
     searchLayout->setSpacing(5);
@@ -772,7 +807,10 @@ void MainWindow::createDock()
     connect(search->resultWidget(), &QHelpSearchResultWidget::requestShowLink, this, [this](const QUrl &url) {
         openUrl(url, (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0);
     });
-    connect(search, &QHelpSearchEngine::indexingStarted, this, [this] { statusBar()->showMessage(tr("正在建立全文索引...")); });
+    connect(search, &QHelpSearchEngine::indexingStarted, this, [this] {
+        if (!m_prebuiltIndexes)
+            statusBar()->showMessage(tr("正在建立全文索引..."));
+    });
     connect(search, &QHelpSearchEngine::indexingFinished, this, [this] { statusBar()->showMessage(tr("全文索引已就绪"), 3000); });
     m_sideTabs->addTab(searchPage, tr("搜索"));
 
@@ -1667,10 +1705,16 @@ QString MainWindow::defaultHomePage() const
 {
     const QStringList docs = m_helpEngine->registeredDocumentations();
     for (const QString &ns : docs) {
-        const QUrl indexUrl(QStringLiteral("qthelp://%1/doc/html/index.html").arg(ns));
-        const QUrl resolvedIndex = m_helpEngine->findFile(indexUrl);
-        if (resolvedIndex.isValid())
-            return resolvedIndex.toString();
+        const QStringList preferred = {
+            QStringLiteral("qthelp://%1/doc/html/index.html"),
+            QStringLiteral("qthelp://%1/doc/html/classes.html"),
+        };
+        for (const QString &pattern : preferred) {
+            const QUrl url(pattern.arg(ns));
+            const QUrl resolved = m_helpEngine->findFile(url);
+            if (resolved.isValid())
+                return resolved.toString();
+        }
 
         const QList<QUrl> files = m_helpEngine->files(ns, QStringList(), QStringLiteral("html"));
         for (const QUrl &url : files) {
@@ -1903,42 +1947,39 @@ HelpBrowser *MainWindow::zoomTargetBrowser() const
 
 void MainWindow::zoomInActivePage()
 {
-    HelpBrowser *browser = zoomTargetBrowser();
-    if (!browser) {
-        statusBar()->showMessage(tr("请先打开文档页面"), 2500);
+    const int before = HelpBrowser::globalZoomPercent();
+    if (!HelpBrowser::canZoomInGlobal()) {
+        statusBar()->showMessage(tr("已达到最大缩放 (220%)"), 2000);
         return;
     }
-    if (DocumentPane *pane = browser->ownerPane())
-        setActivePane(pane);
-    const int before = browser->zoomPercent();
-    browser->zoomIn();
-    if (browser->zoomPercent() == before)
+    HelpBrowser::zoomInGlobal();
+    if (HelpBrowser::globalZoomPercent() == before)
         statusBar()->showMessage(tr("已达到最大缩放 (220%)"), 2000);
+    else
+        statusBar()->showMessage(tr("缩放 %1%（全部页面）").arg(HelpBrowser::globalZoomPercent()), 2000);
+    updateWindowState();
 }
 
 void MainWindow::zoomOutActivePage()
 {
-    HelpBrowser *browser = zoomTargetBrowser();
-    if (!browser) {
-        statusBar()->showMessage(tr("请先打开文档页面"), 2500);
+    const int before = HelpBrowser::globalZoomPercent();
+    if (!HelpBrowser::canZoomOutGlobal()) {
+        statusBar()->showMessage(tr("已达到最小缩放 (60%)"), 2000);
         return;
     }
-    if (DocumentPane *pane = browser->ownerPane())
-        setActivePane(pane);
-    const int before = browser->zoomPercent();
-    browser->zoomOut();
-    if (browser->zoomPercent() == before)
+    HelpBrowser::zoomOutGlobal();
+    if (HelpBrowser::globalZoomPercent() == before)
         statusBar()->showMessage(tr("已达到最小缩放 (60%)"), 2000);
+    else
+        statusBar()->showMessage(tr("缩放 %1%（全部页面）").arg(HelpBrowser::globalZoomPercent()), 2000);
+    updateWindowState();
 }
 
 void MainWindow::resetZoomActivePage()
 {
-    HelpBrowser *browser = zoomTargetBrowser();
-    if (!browser) {
-        statusBar()->showMessage(tr("请先打开文档页面"), 2500);
-        return;
-    }
-    browser->resetZoom();
+    HelpBrowser::resetZoomGlobal();
+    statusBar()->showMessage(tr("缩放已重置为 100%（全部页面）"), 2000);
+    updateWindowState();
 }
 
 static bool isNoisePageTitle(const QString &title)
@@ -2043,7 +2084,11 @@ QUrl MainWindow::normalizeHelpUrl(const QUrl &url) const
 
 HelpBrowser *MainWindow::createPage(const QUrl &url)
 {
+    if (!m_helpEngine)
+        return nullptr;
     DocumentPane *pane = ensureCentralDocumentPane();
+    if (!pane)
+        return nullptr;
     QUrl target = url;
     if (target.isValid() && !target.isEmpty())
         target = normalizeHelpUrl(target);
@@ -2069,6 +2114,8 @@ void MainWindow::refreshAllPageTitles()
 
 void MainWindow::openUrl(const QUrl &url, bool newTab, HelpBrowser *browser)
 {
+    if (!m_helpEngine)
+        return;
     QUrl target = normalizeHelpUrl(url);
     if (target.scheme().startsWith(QStringLiteral("http"))) {
         QDesktopServices::openUrl(target);
@@ -2076,11 +2123,11 @@ void MainWindow::openUrl(const QUrl &url, bool newTab, HelpBrowser *browser)
     }
 
     DocumentPane *pane = ensureCentralDocumentPane();
+    if (!pane)
+        return;
     HelpBrowser *targetBrowser = browser;
     if (newTab) {
         targetBrowser = pane->createPage(target);
-        if (!target.fragment().isEmpty())
-            targetBrowser->navigateToFragment(target.fragment());
         updatePageTitle(targetBrowser);
         updateWindowState();
         return;
@@ -2091,8 +2138,6 @@ void MainWindow::openUrl(const QUrl &url, bool newTab, HelpBrowser *browser)
             targetBrowser = pane->createPage(target);
     }
     targetBrowser->setSource(target);
-    if (!target.fragment().isEmpty())
-        targetBrowser->navigateToFragment(target.fragment());
     updatePageTitle(targetBrowser);
     updateWindowState();
 }
@@ -2119,11 +2164,102 @@ static QList<QHelpLink> dedupeHelpLinks(const QList<QHelpLink> &links)
     return byPage.values();
 }
 
+static bool isObsoleteHelpLink(const QHelpLink &link)
+{
+    const QString title = link.title;
+    const QString path = link.url.path();
+    return title.contains(QStringLiteral("Obsolete"), Qt::CaseInsensitive)
+        || title.contains(QStringLiteral("obsolete"), Qt::CaseInsensitive)
+        || title.contains(QStringLiteral("已废弃"))
+        || title.contains(QStringLiteral("废弃成员"))
+        || path.contains(QStringLiteral("obsolete"), Qt::CaseInsensitive);
+}
+
+static int indexLinkScore(const QString &keyword, const QHelpLink &link)
+{
+    int score = 0;
+    const QString title = link.title;
+    const QString path = link.url.path();
+
+    if (isObsoleteHelpLink(link))
+        score -= 10000;
+    if (title.contains(QStringLiteral("Members for"), Qt::CaseInsensitive)
+        || title.contains(QStringLiteral("成员"), Qt::CaseInsensitive))
+        score -= 800;
+
+    if (title.startsWith(keyword + QStringLiteral(" Class"), Qt::CaseInsensitive)
+        || title.startsWith(keyword + QStringLiteral(" 类"), Qt::CaseInsensitive))
+        score += 900;
+
+    const QString classFile = QStringLiteral("/") + keyword.toLower() + QStringLiteral(".html");
+    if (path.endsWith(classFile, Qt::CaseInsensitive))
+        score += 850;
+
+    if (title.startsWith(keyword, Qt::CaseInsensitive))
+        score += 120;
+
+    return score;
+}
+
+static QList<QHelpLink> preferredIndexLinks(const QString &keyword, const QList<QHelpLink> &links)
+{
+    if (links.size() <= 1)
+        return links;
+
+    if (keyword.contains(QStringLiteral("::"))) {
+        QList<QHelpLink> filtered;
+        for (const QHelpLink &link : links) {
+            if (!isObsoleteHelpLink(link))
+                filtered.append(link);
+        }
+        return filtered.size() == 1 ? filtered : (filtered.isEmpty() ? links : filtered);
+    }
+
+    QHelpLink best = links.first();
+    int bestScore = indexLinkScore(keyword, best);
+    for (int i = 1; i < links.size(); ++i) {
+        const int score = indexLinkScore(keyword, links.at(i));
+        if (score > bestScore) {
+            bestScore = score;
+            best = links.at(i);
+        }
+    }
+    int secondScore = -1000000;
+    for (const QHelpLink &link : links) {
+        if (link.url == best.url)
+            continue;
+        secondScore = qMax(secondScore, indexLinkScore(keyword, link));
+    }
+
+    if (bestScore >= 400 && bestScore > secondScore + 80)
+        return {best};
+
+    QList<QHelpLink> filtered;
+    for (const QHelpLink &link : links) {
+        if (!isObsoleteHelpLink(link))
+            filtered.append(link);
+    }
+    if (filtered.size() == 1)
+        return filtered;
+    return filtered.isEmpty() ? links : filtered;
+}
+
 void MainWindow::activateIndexKeyword(const QString &keyword)
 {
-    if (keyword.isEmpty())
+    if (keyword.isEmpty() || !m_helpEngine)
         return;
-    const QList<QHelpLink> links = dedupeHelpLinks(m_helpEngine->documentsForKeyword(keyword));
+    if (m_prebuiltIndexes && !m_keywordCacheLoaded)
+        scheduleKeywordCacheLoad();
+    if (m_prebuiltIndexes)
+        warmKeywordLinkModel();
+    else
+        ensureKeywordIndex();
+    if (!m_keywordIndexModelReady) {
+        statusBar()->showMessage(tr("索引链接数据仍在加载，请稍后重试"), 4000);
+        return;
+    }
+    const QList<QHelpLink> links =
+        preferredIndexLinks(keyword, dedupeHelpLinks(m_helpEngine->documentsForKeyword(keyword)));
     if (links.size() == 1) {
         const bool newTab = (QApplication::keyboardModifiers() & Qt::ControlModifier) != 0;
         openUrl(indexUrlForKeyword(keyword, links.first()), newTab);
@@ -2254,9 +2390,71 @@ QString MainWindow::indexDisplayText(const QString &keyword) const
     return keyword;
 }
 
+void MainWindow::applyKeywordCache(QStringList keywords)
+{
+    if (keywords.isEmpty())
+        return;
+    m_allIndexKeywords = std::move(keywords);
+    m_allIndexKeywords.sort(Qt::CaseInsensitive);
+    m_allIndexFolded.clear();
+    m_allIndexFolded.reserve(m_allIndexKeywords.size());
+    for (const QString &keyword : std::as_const(m_allIndexKeywords))
+        m_allIndexFolded.append(keyword.toCaseFolded());
+    m_keywordCacheLoaded = true;
+    if (m_indexResults && (m_sideTabs && m_sideTabs->currentWidget() == m_indexPage))
+        refreshIndexResults();
+}
+
+void MainWindow::scheduleKeywordCacheLoad()
+{
+    if (!m_helpEngine || m_keywordCacheLoaded || m_keywordCacheLoadScheduled)
+        return;
+    const QString collectionPath = m_helpEngine->collectionFile();
+    const QString qchPath = resolveBundledQchPath(collectionPath);
+    if (qchPath.isEmpty())
+        return;
+    const QFileInfo qchInfo(qchPath);
+    m_keywordCacheLoadScheduled = true;
+    auto *watcher = new QFutureWatcher<QStringList>(this);
+    connect(watcher, &QFutureWatcher<QStringList>::finished, this, [this, watcher] {
+        m_keywordCacheLoadScheduled = false;
+        applyKeywordCache(watcher->result());
+        watcher->deleteLater();
+    });
+    watcher->setFuture(QtConcurrent::run([collectionPath, qchInfo]() -> QStringList {
+        QStringList keywords;
+        if (!HelpIndexCache::loadKeywords(collectionPath, qchInfo, &keywords))
+            return {};
+        return keywords;
+    }));
+}
+
+void MainWindow::tryLoadBundledKeywordCache()
+{
+    if (!m_helpEngine || m_keywordCacheLoaded)
+        return;
+    if (m_prebuiltIndexes) {
+        scheduleKeywordCacheLoad();
+        return;
+    }
+    const QString collectionPath = m_helpEngine->collectionFile();
+    const QString qchPath = resolveBundledQchPath(collectionPath);
+    if (qchPath.isEmpty())
+        return;
+    QStringList keywords;
+    if (!HelpIndexCache::loadKeywords(collectionPath, QFileInfo(qchPath), &keywords))
+        return;
+    applyKeywordCache(std::move(keywords));
+}
+
 void MainWindow::rebuildIndexCache()
 {
-    m_allIndexKeywords = m_helpEngine->indexModel()->stringList();
+    if (!m_helpEngine)
+        return;
+    QHelpIndexModel *model = m_helpEngine->indexModel();
+    if (!model)
+        return;
+    m_allIndexKeywords = model->stringList();
     m_allIndexKeywords.sort(Qt::CaseInsensitive);
     m_allIndexFolded.clear();
     m_allIndexFolded.reserve(m_allIndexKeywords.size());
@@ -2330,11 +2528,11 @@ void MainWindow::updateChromeState()
     m_closePageAction->setEnabled(pane && pane->tabWidget()->count() > 0);
     m_clearPagesAction->setEnabled(hasBrowser);
     if (m_zoomInAction)
-        m_zoomInAction->setEnabled(!hasBrowser || browser->canZoomIn());
+        m_zoomInAction->setEnabled(HelpBrowser::canZoomInGlobal());
     if (m_zoomOutAction)
-        m_zoomOutAction->setEnabled(!hasBrowser || browser->canZoomOut());
+        m_zoomOutAction->setEnabled(HelpBrowser::canZoomOutGlobal());
     if (m_resetZoomAction)
-        m_resetZoomAction->setEnabled(hasBrowser);
+        m_resetZoomAction->setEnabled(true);
     if (hasBrowser) {
         const QString title = pageTitle(browser);
         setWindowTitle(title + tr(" - Theo Qt Helper"));
@@ -2599,6 +2797,17 @@ void MainWindow::reloadHelpDocumentation(const QString &collectionPath)
     m_indexFilter = nullptr;
     m_indexStatus = nullptr;
     m_indexResults = nullptr;
+    m_indexPage = nullptr;
+    m_searchPage = nullptr;
+    m_keywordIndexRequested = false;
+    m_keywordIndexModelReady = false;
+    m_keywordCacheLoaded = false;
+    m_prebuiltIndexes = false;
+    m_keywordCacheLoadScheduled = false;
+    m_contentTreeReady = false;
+    m_searchIndexScheduled = false;
+    m_allIndexKeywords.clear();
+    m_allIndexFolded.clear();
     m_bookmarks = nullptr;
     m_openPages = nullptr;
 
@@ -2631,7 +2840,71 @@ void MainWindow::reloadHelpDocumentation(const QString &collectionPath)
     statusBar()->showMessage(tr("已切换文档：%1").arg(activeDocVersionLabel()), 5000);
 }
 
+void MainWindow::ensureKeywordIndex()
+{
+    if (m_keywordIndexRequested || !m_helpEngine)
+        return;
+    m_keywordIndexRequested = true;
+    if (m_indexStatus) {
+        if (m_keywordCacheLoaded && !m_keywordIndexModelReady)
+            m_indexStatus->setText(tr("正在加载链接数据..."));
+        else if (!m_keywordCacheLoaded)
+            m_indexStatus->setText(tr("正在加载索引..."));
+    }
+    if (QHelpIndexModel *model = m_helpEngine->indexModel())
+        model->createIndexForCurrentFilter();
+}
+
+void MainWindow::ensureSearchIndex()
+{
+    if (m_searchIndexScheduled || !m_helpEngine)
+        return;
+    m_searchIndexScheduled = true;
+    if (HelpIndexCache::searchIndexReady(m_helpEngine->collectionFile()))
+        return;
+    if (QHelpSearchEngine *search = m_helpEngine->searchEngine())
+        search->scheduleIndexDocumentation();
+}
+
+void MainWindow::ensureContentTree()
+{
+    if (m_contentTreeReady || !m_helpEngine)
+        return;
+    m_contentTreeReady = true;
+    if (QHelpContentModel *model = m_helpEngine->contentModel())
+        model->createContentsForCurrentFilter();
+}
+
+void MainWindow::warmKeywordLinkModel()
+{
+    if (m_keywordIndexModelReady || m_keywordIndexRequested || !m_helpEngine)
+        return;
+    if (QHelpIndexModel *model = m_helpEngine->indexModel())
+        model->createIndexForCurrentFilter();
+    m_keywordIndexRequested = true;
+}
+
+void MainWindow::onSideTabChanged(int index)
+{
+    if (index < 0 || !m_sideTabs)
+        return;
+    if (index == 0)
+        ensureContentTree();
+    QWidget *page = m_sideTabs->widget(index);
+    if (page == m_indexPage) {
+        if (m_prebuiltIndexes)
+            warmKeywordLinkModel();
+        else
+            ensureKeywordIndex();
+    } else if (page == m_searchPage) {
+        ensureSearchIndex();
+    }
+}
+
 void MainWindow::rebuildSearchIndex()
 {
-    m_helpEngine->searchEngine()->reindexDocumentation();
+    m_searchIndexScheduled = false;
+    if (m_helpEngine && m_helpEngine->searchEngine())
+        m_helpEngine->searchEngine()->reindexDocumentation();
+    m_searchIndexScheduled = true;
 }

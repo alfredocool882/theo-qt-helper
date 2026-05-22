@@ -20,6 +20,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     PrintSupport
     Network
     Svg
+    Concurrent
 )
 
 set(_theo_embed_default OFF)
@@ -44,6 +45,8 @@ set(_theo_sources
     src/documentmanagerdialog.h
     src/apptheme.cpp
     src/apptheme.h
+    src/helpindexcache.cpp
+    src/helpindexcache.h
 )
 
 qt_add_executable(TheoQtHelper ${_theo_sources})
@@ -60,6 +63,7 @@ target_link_libraries(TheoQtHelper PRIVATE
     Qt6::PrintSupport
     Qt6::Network
     Qt6::Svg
+    Qt6::Concurrent
 )
 
 if(WIN32)
@@ -82,3 +86,13 @@ if(APPLE)
 endif()
 
 install(TARGETS TheoQtHelper RUNTIME DESTINATION bin BUNDLE DESTINATION .)
+
+option(THEO_BUILD_INDEX_TOOL "Build generate_help_indexes maintainer tool" OFF)
+if(THEO_BUILD_INDEX_TOOL)
+    qt_add_executable(generate_help_indexes
+        tools/generate_help_indexes.cpp
+        src/helpindexcache.cpp
+        src/helpindexcache.h
+    )
+    target_link_libraries(generate_help_indexes PRIVATE Qt6::Help)
+endif()
