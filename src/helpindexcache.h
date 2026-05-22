@@ -13,6 +13,7 @@ QString searchIndexPath(const QString &collectionPath);
 bool searchIndexReady(const QString &collectionPath);
 bool keywordCacheFileValid(const QString &collectionPath, const QFileInfo &qchInfo);
 bool prebuiltReady(const QString &collectionPath, const QFileInfo &qchInfo);
+QStringList dedupeKeywords(const QStringList &keywords);
 bool loadKeywords(const QString &collectionPath, const QFileInfo &qchInfo, QStringList *keywords);
 bool saveKeywords(const QString &collectionPath, const QFileInfo &qchInfo, const QStringList &keywords);
 bool writeKeywordMeta(const QString &collectionPath, const QFileInfo &qchInfo, int keywordCount);

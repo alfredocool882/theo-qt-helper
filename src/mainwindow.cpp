@@ -2460,8 +2460,7 @@ void MainWindow::rebuildIndexCache()
     QHelpIndexModel *model = m_helpEngine->indexModel();
     if (!model)
         return;
-    m_allIndexKeywords = model->stringList();
-    m_allIndexKeywords.sort(Qt::CaseInsensitive);
+    m_allIndexKeywords = HelpIndexCache::dedupeKeywords(model->stringList());
     m_allIndexFolded.clear();
     m_allIndexFolded.reserve(m_allIndexKeywords.size());
     for (const QString &keyword : std::as_const(m_allIndexKeywords))
